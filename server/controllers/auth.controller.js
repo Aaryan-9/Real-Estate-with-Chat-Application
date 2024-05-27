@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 
 export const register = async (req, res) => {
@@ -20,10 +21,36 @@ export const register = async (req, res) => {
   }
 };
 
-export const login = (req, res) => {
-  res.send("Logged in");
+export const login = async (req, res) => {
+  const { username, password } = req.body;
+  // Check if user exists
+  const user = await prisma.user.findUnique({ where: { username } });
+  if (!user) return res.status(401).json({ message: "Invalid Credentials" });
+
+  // Check if password is correct
+  const passwordMatch = await bcrypt.compare(password, user.password);
+  if (!passwordMatch)
+    return res.status(401).json({ message: "Invalid Credentials" });
+  const { password: userPassword, ...userInfo } = user;
+  // Create Cookie
+  const age = 1000 * 60 * 60 * 24 * 7;
+  const token = jwt.sign(
+    { id: user.id, isAdmin: false },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: age,
+    }
+  );
+
+  res
+    .cookie("token", token, {
+      httpOnly: true,
+      maxAge: age,
+    })
+    .status(200)
+    .json({ userInfo });
 };
 
 export const logout = (req, res) => {
-  res.send("Logged out");
+  res.clearCookie("token").json({ message: "Logged out" });
 };
